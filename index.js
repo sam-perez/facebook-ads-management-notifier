@@ -3,21 +3,41 @@ const co = require('co');
 const express = require('express');
 const express_wrap = require('co-express');
 const http = require('http');
+const R = require('ramda');
 
 const facebookService = require('./facebook_service.js');
+const elasticsearchService = require('./elasticsearch_service.js').create(); 
 
-const router = express();
-const server = http.createServer(router);
-
-// parse application/json
-router.use(bodyParser.json());
-
-router.get(`/facebook_ad_targeting_categories`, express_wrap(function*(req, res) {
+const storeSnapshot = co.wrap(function*() {
     const adTargetingCategories = yield facebookService.fetchFacebookAdTargetingCategories();
-    res.send(adTargetingCategories);
-}));
-
-server.listen(process.env.PORT || 3000, process.env.IP || "0.0.0.0", function() {
-    const addr = server.address();
-    console.log("server listening at", addr.address + ":" + addr.port);
+    const snapshotInsertResult = 
+        yield elasticsearchService.insertFacebookAdsTargetingSnapshot(adTargetingCategories);
+        
+    return {adTargetingCategories, snapshotInsertResult};
 });
+
+exports.storeSnapshot = storeSnapshot;
+
+if (require.main === module) {
+    const router = express();
+    const server = http.createServer(router);
+    
+    // parse application/json
+    router.use(bodyParser.json());
+    
+    router.get(`/facebook_ad_targeting_categories`, express_wrap(function*(req, res) {
+        const adTargetingCategories = yield facebookService.fetchFacebookAdTargetingCategories();
+        res.send(adTargetingCategories);
+    }));
+    
+    router.get(`/store_snapshot`, express_wrap(function*(req, res) {
+        const {adTargetingCategories, snapshotInsertResult} = yield storeSnapshot();
+        res.status(R.has('error', snapshotInsertResult) ? 400 : 200)
+            .send({adTargetingCategories, snapshotInsertResult});
+    }));
+    
+    server.listen(process.env.PORT || 3000, process.env.IP || "0.0.0.0", function() {
+        const addr = server.address();
+        console.log("server listening at", addr.address + ":" + addr.port);
+    });
+}
