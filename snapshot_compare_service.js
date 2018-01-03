@@ -20,9 +20,9 @@ const createSnapshotCompareService = () => {
                     return acc;
                 }
 
-                return R.assoc(behaviorKey, firstMap[behaviorKey], acc);
+                return R.append(firstMap[behaviorKey], acc);
             },
-            {},
+            [],
             keysToSearchFor
         );
     }
@@ -39,14 +39,13 @@ const createSnapshotCompareService = () => {
                 const audienceSizeHasChanged = firstAudienceSize !== secondAudienceSize;
 
                 if (secondHasBehavior && audienceSizeHasChanged) {
-                    return R.assoc(
-                        behaviorKey,
+                    return R.append(
                         R.pipe(
                             R.dissoc('audience_size'),
                             R.merge({
                                 previous_audience_size: firstAudienceSize,
                                 current_audience_size: secondAudienceSize,
-                                percent_change: `${100 - (100 * firstAudienceSize / secondAudienceSize)}%`
+                                percent_change: 100 - (100 * firstAudienceSize / secondAudienceSize)
                             })
                         )(firstMap[behaviorKey]),
                         acc
@@ -55,7 +54,7 @@ const createSnapshotCompareService = () => {
 
                 return acc;
             },
-            {},
+            [],
             keysToSearchFor
         );
     }
@@ -65,9 +64,14 @@ const createSnapshotCompareService = () => {
             const firstMap = buildMap(firstSnapshot);
             const secondMap = buildMap(secondSnapshot);
             
-            const removed = findMissingBehaviors(firstMap, secondMap)
+            const removed = findMissingBehaviors(firstMap, secondMap);
             const added = findMissingBehaviors(secondMap, firstMap);
-            const changed = findChangedBehaviours(firstMap, secondMap);
+
+            const comp = (a, b) => Math.abs(b.percent_change) - Math.abs(a.percent_change);
+            const changed = R.sort(
+                comp,
+                findChangedBehaviours(firstMap, secondMap)
+            );
             
             return {
                 removed,

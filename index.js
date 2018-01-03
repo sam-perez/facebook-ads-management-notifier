@@ -35,6 +35,7 @@ const compareSnapshots = co.wrap(function*() {
 });
 
 exports.storeSnapshot = storeSnapshot;
+exports.compareSnapshots = compareSnapshots;
 
 if (require.main === module) {
     const router = express();
